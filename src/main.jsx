@@ -41,7 +41,7 @@ const customerInfo = {
   '8726904209687': { name: 'Workstream MP Team', email: 'workstreammp@veeryoffices.com' },
   '8898937094423': { name: 'Workstream UTAH Team', email: 'workstreamutah@veeryoffices.com' }
   '9138324275479': { name: '@3120 Team'},
-  '9161889743127': { name: 'Llamaindex Team', email: 'llamaindex@veeryoffices.com'
+  '9161889743127': { name: 'Llamaindex Team', email: 'llamaindex@veeryoffices.com'}
 };
 
 function useCustomers() {
