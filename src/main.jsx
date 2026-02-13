@@ -18,7 +18,8 @@ import {
   Badge,
   Divider,
   Layout,
-  LegacyCard
+  LegacyCard,
+  Tabs
 } from '@shopify/polaris'
 import '@shopify/polaris/build/esm/styles.css'
 
@@ -55,10 +56,12 @@ function useCustomers() {
     async function run() {
       try {
         setLoading(true)
-        const res = await fetch(`${API_BASE}/api/customers`)
+        const res = await fetch(`${API_BASE}/api/customers`, {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include'
+        })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = await res.json()
-        // Customer information mapping
         
 
         const options = (json.customers || []).map(c => {
@@ -104,12 +107,14 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [progress, setProgress] = useState(0)
+  const [activeTab, setActiveTab] = useState(0)
+  const [orderDetails, setOrderDetails] = useState([])
+  const [orderDetailsSummary, setOrderDetailsSummary] = useState(null)
 
   async function runReport() {
     try {
       setBusy(true); setErr(''); setProgress(0)
       
-      // Simulate progress updates
       const progressInterval = setInterval(() => {
         setProgress(prev => Math.min(prev + 10, 90))
       }, 200)
@@ -123,7 +128,11 @@ function App() {
       
       const res = await fetch(`${API_BASE}/api/report`, { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
         body: JSON.stringify(body) 
       })
       
@@ -139,14 +148,77 @@ function App() {
       setSummary(json.summary || [])
       setDetail(json.detail || [])
       setAnalytics(json.analytics || null)
+      setActiveTab(0)
       
-      setTimeout(() => setProgress(0), 1000) // Reset progress after completion
+      setTimeout(() => setProgress(0), 1000)
     } catch (e) {
       setErr(String(e))
       setProgress(0)
     } finally {
       setBusy(false)
     }
+  }
+
+  async function fetchOrderDetails() {
+    try {
+      if (!customerId) {
+        setErr('Please select a customer first')
+        return
+      }
+      
+      setBusy(true); setErr(''); setProgress(0)
+      
+      const progressInterval = setInterval(() => {
+        setProgress(prev => Math.min(prev + 10, 90))
+      }, 200)
+      
+      const body = {
+        start: start.toISOString(),
+        end: new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59).toISOString(),
+        customerId: Number(customerId)
+      }
+      
+      console.log('Fetching order details with:', body)
+      console.log('API Base:', API_BASE)
+      
+      const res = await fetch(`${API_BASE}/api/order-details`, { 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify(body) 
+      })
+      
+      clearInterval(progressInterval)
+      setProgress(100)
+      console.log('Response status:', res.status)
+      
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error('Error from server:', errorData)
+        throw new Error(errorData.error || `HTTP ${res.status}`)
+      }
+      
+      const json = await res.json()
+      console.log('Received data:', json)
+      setOrderDetails(json.order_line_items || [])
+      setOrderDetailsSummary(json.summary || null)
+      setActiveTab(1)
+      
+      setTimeout(() => setProgress(0), 1000)
+    } catch (e) {
+      console.error('Fetch error:', e)
+      setErr(String(e))
+      setProgress(0)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleTabChange = (newTabIndex) => {
+    setActiveTab(newTabIndex)
   }
 
   const summaryRows = useMemo(() => (summary || []).map(r => [
@@ -156,6 +228,21 @@ function App() {
     Number(r.amount).toFixed(2),
     r.order_numbers || ''
   ]), [summary])
+
+  const tabs = [
+    {
+      id: 'revenue-report',
+      content: 'Revenue Report',
+      isActive: activeTab === 0,
+      onAction: () => handleTabChange(0)
+    },
+    {
+      id: 'order-details',
+      content: 'Order Details',
+      isActive: activeTab === 1,
+      onAction: () => handleTabChange(1)
+    }
+  ]
 
   return (
     <AppProvider>
@@ -181,28 +268,41 @@ function App() {
                   <Text as="h3" variant="headingSm">Metric</Text>
                   <InlineStack gap="200">
                     <RadioButton label="Billing amount" checked={metric==='billing'} id="metric-billing" name="metric" onChange={()=>setMetric('billing')} />
-                    <RadioButton label="Actual spend" checked={metric==='actual'} id="metric-actual" name="metric" onChange={()=>setMetric('actual')} />
                   </InlineStack>
                 </Box>
                 <Box minWidth="300px">
                   <Text as="h3" variant="headingSm">Customer</Text>
                   <Select options={[{label:'All customers', value:''}, ...customers]} value={customerId} onChange={setCustomerId} disabled={customersLoading} />
                 </Box>
+              </InlineStack>
+              <InlineStack marginTop="400" gap="200">
                 <Box>
-                  <Button primary loading={busy} onClick={runReport}>Generate Report</Button>
+                  <Button primary loading={busy} onClick={runReport}>Order Level Report</Button>
+                </Box>
+                <Box>
+                  <Button loading={busy} onClick={fetchOrderDetails}>Item Level Report</Button>
                 </Box>
               </InlineStack>
               
               {busy && (
-                <Box paddingTop="300">
-                  <ProgressBar progress={progress} />
-                  <Text as="p" variant="bodySm" color="subdued">Generating report...</Text>
+                <Box marginTop="500" paddingTop="500" paddingBottom="300">
+                  <Text as="p" variant="bodySm" color="subdued" paddingTop="200" marginTop="500">Processing...</Text>
+                  <ProgressBar progress={progress} marginTop="2000" />
+                  
                 </Box>
               )}
             </Box>
           </Card>
 
-          {analytics && (
+          {/* Tabs for switching between views */}
+          {(detail.length > 0 || orderDetails.length > 0) && (
+            <Box paddingY="400">
+              <Tabs tabs={tabs} selected={activeTab} onSelect={setActiveTab} />
+            </Box>
+          )}
+
+          {/* Revenue Report Tab */}
+          {activeTab === 0 && analytics && (
             <Box paddingY="400">
               <Layout>
                 <Layout.Section>
@@ -231,7 +331,7 @@ function App() {
             </Box>
           )}
 
-          {detail.length > 0 && (
+          {activeTab === 0 && detail.length > 0 && (
             <Box paddingY="400">
               <Card>
                 <Box padding="400">
@@ -260,7 +360,6 @@ function App() {
                   
                   <Divider />
                   
-                  {/* Total Summary Section */}
                   <Box paddingY="400">
                     <Text as="h3" variant="headingSm" paddingBottom="300">Total Summary</Text>
                     <Layout>
@@ -325,6 +424,165 @@ function App() {
                 </Box>
               </Card>
             </Box>
+          )}
+
+          {/* Order Details Tab */}
+          {activeTab === 1 && orderDetails.length > 0 && (
+            (() => {
+              // Group items by order number (or order_id when missing)
+              const groups = {}
+              for (const it of orderDetails) {
+                const key = it.order_number || String(it.order_id)
+                if (!groups[key]) groups[key] = []
+                groups[key].push(it)
+              }
+
+              const grouped = Object.keys(groups).map(orderNum => ({ orderNum, items: groups[orderNum] }))
+
+              // Totals
+              const totalLineAmount = orderDetails.reduce((s, it) => s + (Number(it.price) || 0), 0)
+              const totalAdditionalCharges = grouped.reduce((s, g) => {
+                // find first non-zero additional_charges for the order
+                const first = g.items.find(i => i.additional_charges && Number(i.additional_charges) !== 0)
+                return s + (first ? Number(first.additional_charges) : 0)
+              }, 0)
+              const totalWithCharges = totalLineAmount + totalAdditionalCharges
+
+              return (
+                <>
+                  <Box paddingY="400">
+                    <Card>
+                      <Box padding="400">
+                        <Text as="h3" variant="headingSm" paddingBottom="300">Order Line Items</Text>
+                        <Text as="p" variant="bodySm" color="subdued" paddingBottom="300">
+                          Showing {orderDetails.length} line items for {orderDetailsSummary?.date_range?.start ? new Date(orderDetailsSummary.date_range.start).toLocaleDateString() : ''} to {orderDetailsSummary?.date_range?.end ? new Date(orderDetailsSummary.date_range.end).toLocaleDateString() : ''}
+                        </Text>
+
+                        <Box paddingY="300" style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
+                            <thead>
+                              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ddd' }}>
+                                <th style={{ padding: '8px' }}>Order Num</th>
+                                <th style={{ padding: '8px' }}>CreatedDate</th>
+                                <th style={{ padding: '8px' }}>FulfilledDate</th>
+                                <th style={{ padding: '8px' }}>Product</th>
+                                <th style={{ padding: '8px' }}>UnitPrice</th>
+                                <th style={{ padding: '8px' }}>Qty</th>
+                                <th style={{ padding: '8px' }}>Price</th>
+                                <th style={{ padding: '8px' }}>Additional Charges</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {grouped.map(g => {
+                                const rowspan = g.items.length
+                                // find first additional charge for order
+                                const add = g.items.find(i => i.additional_charges && Number(i.additional_charges) !== 0)
+                                return g.items.map((item, idx) => (
+                                  <tr key={`${g.orderNum}-${idx}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                    <td style={{ padding: '8px', verticalAlign: 'top' }}>{g.orderNum}</td>
+                                    <td style={{ padding: '8px', verticalAlign: 'top' }}>{new Date(item.created_date).toLocaleDateString()}</td>
+                                    <td style={{ padding: '8px', verticalAlign: 'top' }}>{item.fulfilled_date ? new Date(item.fulfilled_date).toLocaleDateString() : new Date(item.created_date).toLocaleDateString()}</td>
+                                    <td style={{ padding: '8px', verticalAlign: 'top', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.product_title || 'N/A'}</td>
+                                    <td style={{ padding: '8px', verticalAlign: 'top' }}>${Number(item.unit_price).toFixed(2)}</td>
+                                    <td style={{ padding: '8px', verticalAlign: 'top' }}>{String(item.quantity)}</td>
+                                    <td style={{ padding: '8px', verticalAlign: 'top' }}>${Number(item.price).toFixed(2)}</td>
+                                    {idx === 0 ? (
+                                      <td style={{ padding: '8px', verticalAlign: 'top' }} rowSpan={rowspan}>{add ? `$${Number(add.additional_charges).toFixed(2)}` : ''}</td>
+                                    ) : null}
+                                  </tr>
+                                ))
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr style={{ borderTop: '2px solid #ddd' }}>
+                                <td style={{ padding: '8px' }} colSpan={6}><strong>Totals</strong></td>
+                                <td style={{ padding: '8px' }}><strong>${totalLineAmount.toFixed(2)}</strong></td>
+                                <td style={{ padding: '8px' }}><strong>${totalAdditionalCharges.toFixed(2)}</strong></td>
+                              </tr>
+                              <tr>
+                                <td style={{ padding: '8px' }} colSpan={7}><strong>Grand Total (line items + additional charges)</strong></td>
+                                <td style={{ padding: '8px' }}><strong>${totalWithCharges.toFixed(2)}</strong></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </Box>
+                      </Box>
+                    </Card>
+                  </Box>
+
+                  {/* Summary Card (keeps the server-provided summary but shows computed totals too) */}
+                  <Box paddingY="400">
+                    <Card>
+                      <Box padding="400">
+                        <Text as="h3" variant="headingSm" paddingBottom="300">Summary</Text>
+                        <Layout>
+                          <Layout.Section>
+                            <LegacyCard sectioned>
+                              <InlineStack gap="400" align="space-between">
+                                <Box>
+                                  <Text as="h4" variant="headingMd">Total Line Items</Text>
+                                  <Text as="p" variant="headingLg">{orderDetails.length}</Text>
+                                </Box>
+                                <Box>
+                                  <Text as="h4" variant="headingMd">Total Amount</Text>
+                                  <Text as="p" variant="headingLg">${totalLineAmount.toFixed(2)}</Text>
+                                </Box>
+                                <Box>
+                                  <Text as="h4" variant="headingMd">Additional Charges</Text>
+                                  <Text as="p" variant="headingLg">${totalAdditionalCharges.toFixed(2)}</Text>
+                                </Box>
+                                <Box>
+                                  <Text as="h4" variant="headingMd">Total with Charges</Text>
+                                  <Text as="p" variant="headingLg">${totalWithCharges.toFixed(2)}</Text>
+                                </Box>
+                              </InlineStack>
+                            </LegacyCard>
+                          </Layout.Section>
+                        </Layout>
+                      </Box>
+                    </Card>
+                  </Box>
+
+                  {/* Export Button */}
+                  <Box paddingY="400">
+                    <Button onClick={()=>{
+                      const headers = ['OrderID', 'CreatedDate', 'FulfilledDate', 'Product', 'UnitPrice', 'Qty', 'Price', 'Additional Charges']
+                      const csvLines = [headers.join(',')]
+                      
+                      grouped.forEach(g => {
+                        // write each row; additional charge only on first row
+                        const add = g.items.find(i => i.additional_charges && Number(i.additional_charges) !== 0)
+                        g.items.forEach((item, idx) => {
+                          const row = [
+                            g.orderNum,
+                            item.created_date,
+                            item.fulfilled_date || item.created_date,
+                            JSON.stringify(item.product_title),
+                            Number(item.unit_price).toFixed(2),
+                            item.quantity,
+                            Number(item.price).toFixed(2),
+                            idx === 0 ? (add ? Number(add.additional_charges).toFixed(2) : '') : ''
+                          ].join(',')
+                          csvLines.push(row)
+                        })
+                      })
+
+                      // append totals row
+                      csvLines.push(['', '', '', '', '', '', `Totals: ${totalLineAmount.toFixed(2)}`, totalAdditionalCharges.toFixed(2)].join(','))
+
+                      const csv = csvLines.join('\n')
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `order_details_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    }}>Export to CSV</Button>
+                  </Box>
+                </>
+              )
+            })()
           )}
         </Page>
       </Box>
