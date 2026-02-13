@@ -24,6 +24,12 @@ import {
 import '@shopify/polaris/build/esm/styles.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'
+const shouldIncludeCredentials = (typeof window !== 'undefined') && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  API_BASE.includes('localhost') ||
+  API_BASE.includes('127.0.0.1')
+)
 
 const customerInfo = {
   '8688425369879': { name: 'Auxia Team', email: 'auxia@veeryoffices.com' },
@@ -58,7 +64,7 @@ function useCustomers() {
         setLoading(true)
         const res = await fetch(`${API_BASE}/api/customers`, {
           headers: { 'Accept': 'application/json' },
-          credentials: 'include'
+          credentials: shouldIncludeCredentials ? 'include' : 'omit'
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = await res.json()
@@ -132,7 +138,7 @@ function App() {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        credentials: 'include',
+        credentials: shouldIncludeCredentials ? 'include' : 'omit',
         body: JSON.stringify(body) 
       })
       
@@ -187,7 +193,7 @@ function App() {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        credentials: 'include',
+        credentials: shouldIncludeCredentials ? 'include' : 'omit',
         body: JSON.stringify(body) 
       })
       
