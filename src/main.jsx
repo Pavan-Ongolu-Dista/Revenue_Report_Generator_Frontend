@@ -350,14 +350,14 @@ function App() {
                   <Box paddingY="300">
                     <DataTable
                       columnContentTypes={[ 'text','text','text','text','numeric','numeric','numeric','numeric','numeric' ]}
-                      headings={[ 'Order #','Date','Customer','Email','Line Items','Additional','Billing','Actual','Profit %' ]}
+                      headings={[ 'Order #','Date','Customer','Email','Line Items','Additional Taxes','Billing','Actual','Profit %' ]}
                       rows={detail.map(d => [
                         d.order_number || `#${d.order_id}`,
                         new Date(d.order_date).toLocaleDateString(),
                         d.customer_name || d.customer_id || 'Unknown',
                         d.customer_email || '-',
                         `$${d.line_sum.toFixed(2)}`,
-                        `$${d.additional_charges.toFixed(2)}`,
+                        `$${(d.additional_taxes || d.additional_charges || 0).toFixed(2)}`,
                         `$${d.billing_amount.toFixed(2)}`,
                         `$${d.actual_spend.toFixed(2)}`,
                         `${d.profit_margin.toFixed(1)}%`
@@ -382,8 +382,8 @@ function App() {
                               <Text as="p" variant="headingLg">${detail.reduce((sum, d) => sum + d.line_sum, 0).toFixed(2)}</Text>
                             </Box>
                             <Box>
-                              <Text as="h4" variant="headingMd">Total Additional Charges</Text>
-                              <Text as="p" variant="headingLg">${detail.reduce((sum, d) => sum + d.additional_charges, 0).toFixed(2)}</Text>
+                              <Text as="h4" variant="headingMd">Total Additional Taxes</Text>
+                              <Text as="p" variant="headingLg">${detail.reduce((sum, d) => sum + (d.additional_taxes || d.additional_charges || 0), 0).toFixed(2)}</Text>
                             </Box>
                             <Box>
                               <Text as="h4" variant="headingMd">Total Billing Amount</Text>
@@ -420,8 +420,8 @@ function App() {
                         const a = document.createElement('a'); a.href=url; a.download=`revenue_${metric}_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url)
                       }}>Export Summary CSV</Button>
                       <Button onClick={()=>{
-                        const cols = ['order_id','order_number','order_date','customer_name','customer_email','line_sum','additional_charges','billing_amount','actual_spend','profit_margin']
-                        const csv = [cols.join(','), ...detail.map(d=>cols.map(c=>JSON.stringify(d[c] ?? '')).join(','))].join('\n')
+                        const cols = ['order_id','order_number','order_date','customer_name','customer_email','line_sum','additional_taxes','billing_amount','actual_spend','profit_margin']
+                        const csv = [cols.join(','), ...detail.map(d=>cols.map(c=>c==='additional_taxes' ? JSON.stringify(d.additional_taxes || d.additional_charges || '') : JSON.stringify(d[c] ?? '')).join(','))].join('\n')
                         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
                         const url = URL.createObjectURL(blob)
                         const a = document.createElement('a'); a.href=url; a.download=`orders_${metric}_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url)
@@ -449,9 +449,9 @@ function App() {
               // Totals
               const totalLineAmount = orderDetails.reduce((s, it) => s + (Number(it.price) || 0), 0)
               const totalAdditionalCharges = grouped.reduce((s, g) => {
-                // find first non-zero additional_charges for the order
-                const first = g.items.find(i => i.additional_charges && Number(i.additional_charges) !== 0)
-                return s + (first ? Number(first.additional_charges) : 0)
+                // find first non-zero additional_taxes for the order
+                const first = g.items.find(i => (i.additional_taxes || i.additional_charges) && Number(i.additional_taxes || i.additional_charges) !== 0)
+                return s + (first ? Number(first.additional_taxes || first.additional_charges) : 0)
               }, 0)
               const totalWithCharges = totalLineAmount + totalAdditionalCharges
 
@@ -476,14 +476,14 @@ function App() {
                                 <th style={{ padding: '8px' }}>UnitPrice</th>
                                 <th style={{ padding: '8px' }}>Qty</th>
                                 <th style={{ padding: '8px' }}>Price</th>
-                                <th style={{ padding: '8px' }}>Additional Charges</th>
+                                <th style={{ padding: '8px' }}>Additional Taxes</th>
                               </tr>
                             </thead>
                             <tbody>
                               {grouped.map(g => {
                                 const rowspan = g.items.length
                                 // find first additional charge for order
-                                const add = g.items.find(i => i.additional_charges && Number(i.additional_charges) !== 0)
+                                const add = g.items.find(i => (i.additional_taxes || i.additional_charges) && Number(i.additional_taxes || i.additional_charges) !== 0)
                                 return g.items.map((item, idx) => (
                                   <tr key={`${g.orderNum}-${idx}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '8px', verticalAlign: 'top' }}>{g.orderNum}</td>
@@ -494,7 +494,7 @@ function App() {
                                     <td style={{ padding: '8px', verticalAlign: 'top' }}>{String(item.quantity)}</td>
                                     <td style={{ padding: '8px', verticalAlign: 'top' }}>${Number(item.price).toFixed(2)}</td>
                                     {idx === 0 ? (
-                                      <td style={{ padding: '8px', verticalAlign: 'top' }} rowSpan={rowspan}>{add ? `$${Number(add.additional_charges).toFixed(2)}` : ''}</td>
+                                      <td style={{ padding: '8px', verticalAlign: 'top' }} rowSpan={rowspan}>{add ? `$${Number(add.additional_taxes || add.additional_charges).toFixed(2)}` : ''}</td>
                                     ) : null}
                                   </tr>
                                 ))
@@ -507,7 +507,7 @@ function App() {
                                 <td style={{ padding: '8px' }}><strong>${totalAdditionalCharges.toFixed(2)}</strong></td>
                               </tr>
                               <tr>
-                                <td style={{ padding: '8px' }} colSpan={7}><strong>Grand Total (line items + additional charges)</strong></td>
+                                <td style={{ padding: '8px' }} colSpan={7}><strong>Grand Total (line items + additional taxes)</strong></td>
                                 <td style={{ padding: '8px' }}><strong>${totalWithCharges.toFixed(2)}</strong></td>
                               </tr>
                             </tfoot>
@@ -535,7 +535,7 @@ function App() {
                                   <Text as="p" variant="headingLg">${totalLineAmount.toFixed(2)}</Text>
                                 </Box>
                                 <Box>
-                                  <Text as="h4" variant="headingMd">Additional Charges</Text>
+                                  <Text as="h4" variant="headingMd">Additional Taxes</Text>
                                   <Text as="p" variant="headingLg">${totalAdditionalCharges.toFixed(2)}</Text>
                                 </Box>
                                 <Box>
@@ -553,7 +553,7 @@ function App() {
                   {/* Export Button */}
                   <Box paddingY="400">
                     <Button onClick={()=>{
-                      const headers = ['OrderID', 'CreatedDate', 'FulfilledDate', 'Product', 'UnitPrice', 'Qty', 'Price', 'Additional Charges']
+                      const headers = ['OrderID', 'CreatedDate', 'FulfilledDate', 'Product', 'UnitPrice', 'Qty', 'Price', 'Additional Taxes']
                       const csvLines = [headers.join(',')]
                       
                       grouped.forEach(g => {
