@@ -420,8 +420,8 @@ function App() {
                         const a = document.createElement('a'); a.href=url; a.download=`revenue_${metric}_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url)
                       }}>Export Summary CSV</Button>
                       <Button onClick={()=>{
-                        const cols = ['order_id','order_number','order_date','customer_name','customer_email','line_sum','additional_charges','billing_amount','actual_spend','profit_margin']
-                        const csv = [cols.join(','), ...detail.map(d=>cols.map(c=>JSON.stringify(d[c] ?? '')).join(','))].join('\n')
+                        const cols = ['order_id','order_number','order_date','customer_name','customer_email','line_sum','additional_taxes','billing_amount','actual_spend','profit_margin']
+                        const csv = [cols.join(','), ...detail.map(d=>cols.map(c=>c==='additional_taxes' ? JSON.stringify(d.additional_charges ?? '') : JSON.stringify(d[c] ?? '')).join(','))].join('\n')
                         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
                         const url = URL.createObjectURL(blob)
                         const a = document.createElement('a'); a.href=url; a.download=`orders_${metric}_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url)
