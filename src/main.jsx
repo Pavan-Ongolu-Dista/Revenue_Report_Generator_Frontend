@@ -245,6 +245,31 @@ function App() {
     r.order_numbers || ''
   ]), [summary])
 
+  const orderLevelDetail = useMemo(() => {
+    const byOrderId = new Map()
+    for (const d of detail || []) {
+      const key = String(d.order_id)
+      if (!byOrderId.has(key)) byOrderId.set(key, d)
+    }
+    return Array.from(byOrderId.values()).sort((a, b) => {
+      const dateDiff = new Date(b.order_date).getTime() - new Date(a.order_date).getTime()
+      if (dateDiff !== 0) return dateDiff
+      const numA = Number(a.order_number) || 0
+      const numB = Number(b.order_number) || 0
+      if (numB !== numA) return numB - numA
+      return String(b.order_id).localeCompare(String(a.order_id))
+    })
+  }, [detail])
+
+  const orderLevelTotals = useMemo(() => {
+    const totalLine = orderLevelDetail.reduce((sum, d) => sum + Number(d.line_sum || 0), 0)
+    const totalTaxes = orderLevelDetail.reduce((sum, d) => sum + Number(d.additional_charges || 0), 0)
+    const totalBilling = orderLevelDetail.reduce((sum, d) => sum + Number(d.billing_amount || 0), 0)
+    const totalActual = orderLevelDetail.reduce((sum, d) => sum + Number(d.actual_spend || 0), 0)
+    const avgProfitMargin = totalBilling > 0 ? ((totalBilling - totalActual) / totalBilling) * 100 : 0
+    return { totalLine, totalTaxes, totalBilling, totalActual, avgProfitMargin }
+  }, [orderLevelDetail])
+
   const tabs = [
     {
       id: 'revenue-report',
@@ -347,20 +372,20 @@ function App() {
             </Box>
           )}
 
-          {activeTab === 0 && detail.length > 0 && (
+          {activeTab === 0 && orderLevelDetail.length > 0 && (
             <Box paddingY="400">
               <Card>
                 <Box padding="400">
                   <InlineStack gap="200" align="space-between">
                     <Text as="h3" variant="headingSm">Order Details</Text>
-                    <Badge status="success">{detail.length} orders</Badge>
+                    <Badge status="success">{orderLevelDetail.length} orders</Badge>
                   </InlineStack>
                   
                   <Box paddingY="300">
                     <DataTable
                       columnContentTypes={[ 'text','text','text','text','numeric','numeric','numeric','numeric','numeric' ]}
                       headings={[ 'Order #','Date','Customer','Email','Line Items','Additional Taxes','Billing','Actual','Profit %' ]}
-                      rows={detail.map(d => [
+                      rows={orderLevelDetail.map(d => [
                         d.order_number || `#${d.order_id}`,
                         new Date(d.order_date).toLocaleDateString(),
                         d.customer_name || d.customer_id || 'Unknown',
@@ -384,27 +409,27 @@ function App() {
                           <InlineStack gap="400" align="space-between">
                             <Box>
                               <Text as="h4" variant="headingMd">Total Orders</Text>
-                              <Text as="p" variant="headingLg">{detail.length}</Text>
+                              <Text as="p" variant="headingLg">{orderLevelDetail.length}</Text>
                             </Box>
                             <Box>
                               <Text as="h4" variant="headingMd">Total Line Items</Text>
-                              <Text as="p" variant="headingLg">${detail.reduce((sum, d) => sum + d.line_sum, 0).toFixed(2)}</Text>
+                              <Text as="p" variant="headingLg">${orderLevelTotals.totalLine.toFixed(2)}</Text>
                             </Box>
                             <Box>
                               <Text as="h4" variant="headingMd">Total Additional Taxes</Text>
-                              <Text as="p" variant="headingLg">${detail.reduce((sum, d) => sum + d.additional_charges, 0).toFixed(2)}</Text>
+                              <Text as="p" variant="headingLg">${orderLevelTotals.totalTaxes.toFixed(2)}</Text>
                             </Box>
                             <Box>
                               <Text as="h4" variant="headingMd">Total Billing Amount</Text>
-                              <Text as="p" variant="headingLg">${detail.reduce((sum, d) => sum + d.billing_amount, 0).toFixed(2)}</Text>
+                              <Text as="p" variant="headingLg">${orderLevelTotals.totalBilling.toFixed(2)}</Text>
                             </Box>
                             <Box>
                               <Text as="h4" variant="headingMd">Total Actual Spend</Text>
-                              <Text as="p" variant="headingLg">${detail.reduce((sum, d) => sum + d.actual_spend, 0).toFixed(2)}</Text>
+                              <Text as="p" variant="headingLg">${orderLevelTotals.totalActual.toFixed(2)}</Text>
                             </Box>
                             <Box>
                               <Text as="h4" variant="headingMd">Average Profit Margin</Text>
-                              <Text as="p" variant="headingLg">{detail.length > 0 ? (detail.reduce((sum, d) => sum + d.profit_margin, 0) / detail.length).toFixed(1) : 0}%</Text>
+                              <Text as="p" variant="headingLg">{orderLevelTotals.avgProfitMargin.toFixed(1)}%</Text>
                             </Box>
                           </InlineStack>
                         </LegacyCard>
@@ -430,7 +455,7 @@ function App() {
                       }}>Export Summary CSV</Button>
                       <Button onClick={()=>{
                         const cols = ['order_id','order_number','order_date','customer_name','customer_email','line_sum','additional_taxes','billing_amount','actual_spend','profit_margin']
-                        const csv = [cols.join(','), ...detail.map(d=>cols.map(c=>c==='additional_taxes' ? JSON.stringify(d.additional_charges ?? '') : JSON.stringify(d[c] ?? '')).join(','))].join('\n')
+                        const csv = [cols.join(','), ...orderLevelDetail.map(d=>cols.map(c=>c==='additional_taxes' ? JSON.stringify(d.additional_charges ?? '') : JSON.stringify(d[c] ?? '')).join(','))].join('\n')
                         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
                         const url = URL.createObjectURL(blob)
                         const a = document.createElement('a'); a.href=url; a.download=`orders_${metric}_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url)
