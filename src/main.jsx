@@ -100,6 +100,13 @@ function useCustomers() {
   return { customers, loading, error }
 }
 
+function buildReportDateRangeIso(startDate, endDate) {
+  return {
+    start: new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0).toISOString(),
+    end: new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString()
+  };
+}
+
 function App() {
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -126,9 +133,10 @@ function App() {
         setProgress(prev => Math.min(prev + 10, 90))
       }, 200)
       
+      const { start: rangeStart, end: rangeEnd } = buildReportDateRangeIso(start, end)
       const body = {
-        start: start.toISOString(),
-        end: new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59).toISOString(),
+        start: rangeStart,
+        end: rangeEnd,
         metric,
         customerId: customerId ? Number(customerId) : undefined
       }
@@ -179,9 +187,10 @@ function App() {
         setProgress(prev => Math.min(prev + 10, 90))
       }, 200)
       
+      const { start: rangeStart, end: rangeEnd } = buildReportDateRangeIso(start, end)
       const body = {
-        start: start.toISOString(),
-        end: new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59).toISOString(),
+        start: rangeStart,
+        end: rangeEnd,
         customerId: Number(customerId)
       }
       
