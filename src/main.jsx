@@ -107,6 +107,18 @@ function buildReportDateRangeIso(startDate, endDate) {
   };
 }
 
+function formatDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseDateInputValue(value) {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function App() {
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -301,8 +313,8 @@ function App() {
                 <Box>
                   <Text as="h3" variant="headingSm">Date range</Text>
                   <InlineStack gap="200">
-                    <input type="date" value={start.toISOString().slice(0,10)} onChange={e=>setStart(new Date(e.target.value))} />
-                    <input type="date" value={end.toISOString().slice(0,10)} onChange={e=>setEnd(new Date(e.target.value))} />
+                    <input type="date" value={formatDateInputValue(start)} onChange={e=>setStart(parseDateInputValue(e.target.value))} />
+                    <input type="date" value={formatDateInputValue(end)} onChange={e=>setEnd(parseDateInputValue(e.target.value))} />
                   </InlineStack>
                 </Box>
                 <Box>
